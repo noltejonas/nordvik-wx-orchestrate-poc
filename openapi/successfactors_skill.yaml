@@ -1,0 +1,217 @@
+openapi: "3.0.3"
+info:
+  title: "Norvik SAP SuccessFactors Skill API"
+  description: |
+    SAP SuccessFactors Employee Central API wrapped as a watsonx Orchestrate skill.
+    All requests route through Norvik's Azure API Management gateway.
+    IBM Client Engineering PoC — Norvik Industries AB.
+  version: "1.0.0"
+  contact:
+    name: "IBM Client Engineering"
+    email: "ce-emea@ibm.com"
+
+servers:
+  - url: "https://apim.nordvik.se/sap/successfactors/v1"
+    description: "Norvik Azure APIM Gateway (Production)"
+  - url: "https://apim-staging.nordvik.se/sap/successfactors/v1"
+    description: "Norvik Azure APIM Gateway (Staging)"
+
+security:
+  - oauth2ClientCredentials: []
+
+paths:
+  /employees/{employeeId}:
+    get:
+      operationId: getEmployee
+      summary: "Get employee record"
+      description: "Fetches a full employee record from SAP SuccessFactors Employee Central by employee ID"
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "EMP-10842"
+          description: "SAP SuccessFactors employee ID (format: EMP-NNNNN)"
+        - name: $expand
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "employmentNav,jobInfoNav,managerNav"
+      responses:
+        "200":
+          description: "Employee record found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeRecord"
+        "404":
+          description: "Employee not found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sap-access-requests:
+    post:
+      operationId: requestSapAccess
+      summary: "Request SAP S/4HANA access"
+      description: "Submits a role access request for an employee in SAP S/4HANA Cloud"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SapAccessRequest"
+      responses:
+        "201":
+          description: "Access request created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SapAccessResponse"
+        "400":
+          description: "Invalid request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /employees/{employeeId}/onboarding:
+    patch:
+      operationId: updateOnboardingStatus
+      summary: "Update onboarding status"
+      description: "Writes the automated onboarding completion status back to SuccessFactors"
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnboardingStatusUpdate"
+      responses:
+        "200":
+          description: "Status updated"
+        "404":
+          description: "Employee not found"
+
+components:
+  securitySchemes:
+    oauth2ClientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: "https://apim.nordvik.se/sap/oauth/token"
+          scopes:
+            "successfactors.employee.read": "Read employee records"
+            "successfactors.sap.write": "Write SAP access requests and onboarding status"
+
+  schemas:
+    EmployeeRecord:
+      type: object
+      required: [userId, displayName, firstName, lastName]
+      properties:
+        userId:
+          type: string
+          example: "EMP-10842"
+        displayName:
+          type: string
+          example: "Anna Lindqvist"
+        firstName:
+          type: string
+          example: "Anna"
+        lastName:
+          type: string
+          example: "Lindqvist"
+        email:
+          type: string
+          format: email
+          example: "a.lindqvist@nordvik.se"
+        department:
+          type: string
+          example: "R&D"
+        jobTitle:
+          type: string
+          example: "Senior Engineer"
+        costCenter:
+          type: string
+          example: "CC-RD-042"
+        managerId:
+          type: string
+          example: "EMP-10001"
+        managerEmail:
+          type: string
+          format: email
+          example: "erik.lindstrom@nordvik.se"
+        hireDate:
+          type: string
+          format: date
+          example: "2027-01-13"
+        employmentStatus:
+          type: string
+          enum: [active, inactive, terminated]
+        location:
+          type: string
+          example: "Stockholm"
+
+    SapAccessRequest:
+      type: object
+      required: [employeeId, sapRole, costCentre]
+      properties:
+        employeeId:
+          type: string
+        sapRole:
+          type: string
+          example: "Z_ENG_SENIOR"
+        costCentre:
+          type: string
+          example: "CC-RD-042"
+        requiresApproval:
+          type: boolean
+          default: true
+        requestedBy:
+          type: string
+          example: "watsonx-orchestrate-agent"
+
+    SapAccessResponse:
+      type: object
+      properties:
+        requestId:
+          type: string
+          example: "SAP-REQ-20241-0042"
+        status:
+          type: string
+          enum: [submitted, pending_approval, approved, rejected]
+        estimatedActivationTime:
+          type: string
+          format: date-time
+
+    OnboardingStatusUpdate:
+      type: object
+      required: [automatedOnboardingStatus, automatedOnboardingCompletedAt]
+      properties:
+        automatedOnboardingStatus:
+          type: string
+          enum: [AUTOMATED_ONBOARDING_COMPLETE, AUTOMATED_ONBOARDING_PARTIAL, AUTOMATED_ONBOARDING_FAILED]
+        automatedOnboardingCompletedAt:
+          type: string
+          format: date-time
+        automatedOnboardingAgent:
+          type: string
+          example: "ibm-wx-orchestrate-poc-v1"
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object

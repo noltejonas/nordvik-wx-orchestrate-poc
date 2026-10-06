@@ -1,0 +1,141 @@
+# Norvik Industries AB — Skill Registry
+# IBM Client Engineering PoC · watsonx Orchestrate
+#
+# All skills are registered as OpenAPI 3.0 specs.
+# Authentication is handled at the Azure APIM gateway layer.
+
+skills:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # SAP SuccessFactors Employee Central Skills
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - id: successfactors-get-employee
+    name: "Get Employee from SuccessFactors"
+    description: "Fetches a full employee record from SAP SuccessFactors Employee Central"
+    openapi_spec: openapi/successfactors_skill.yaml
+    operation_id: getEmployee
+    auth:
+      type: oauth2_client_credentials
+      token_url: "${SF_TOKEN_URL}"
+      client_id: "${SF_CLIENT_ID}"
+      client_secret: "${SF_CLIENT_SECRET}"
+    endpoint: "${SF_API_URL}/employees/{employeeId}"
+    timeout_seconds: 30
+
+  - id: successfactors-request-sap-access
+    name: "Request SAP S/4HANA Access"
+    description: "Submits an SAP S/4HANA role request for an employee via SuccessFactors"
+    openapi_spec: openapi/successfactors_skill.yaml
+    operation_id: requestSapAccess
+    auth:
+      type: oauth2_client_credentials
+      token_url: "${SF_TOKEN_URL}"
+      client_id: "${SF_CLIENT_ID}"
+      client_secret: "${SF_CLIENT_SECRET}"
+    endpoint: "${SF_API_URL}/sap-access-requests"
+    timeout_seconds: 30
+
+  - id: successfactors-update-onboarding-status
+    name: "Update Onboarding Status in SuccessFactors"
+    description: "Writes the automated onboarding completion status back to SuccessFactors"
+    openapi_spec: openapi/successfactors_skill.yaml
+    operation_id: updateOnboardingStatus
+    auth:
+      type: oauth2_client_credentials
+      token_url: "${SF_TOKEN_URL}"
+      client_id: "${SF_CLIENT_ID}"
+      client_secret: "${SF_CLIENT_SECRET}"
+    endpoint: "${SF_API_URL}/employees/{employeeId}/onboarding"
+    timeout_seconds: 15
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Azure AD / Entra ID Skills
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - id: azure-ad-create-user
+    name: "Create Azure AD User"
+    description: "Creates a new user in Azure AD, assigns M365 licence and security groups"
+    openapi_spec: openapi/azure_ad_skill.yaml
+    operation_id: createUser
+    auth:
+      type: oauth2_client_credentials
+      token_url: "https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/token"
+      client_id: "${AZURE_CLIENT_ID}"
+      client_secret: "${AZURE_CLIENT_SECRET}"
+      scope: "https://graph.microsoft.com/.default"
+    endpoint: "https://graph.microsoft.com/v1.0/users"
+    timeout_seconds: 60
+
+  - id: azure-ad-add-to-group
+    name: "Add User to Azure AD Group"
+    description: "Adds an existing user to a named Azure AD security group"
+    openapi_spec: openapi/azure_ad_skill.yaml
+    operation_id: addUserToGroup
+    auth:
+      type: oauth2_client_credentials
+      token_url: "https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/token"
+      client_id: "${AZURE_CLIENT_ID}"
+      client_secret: "${AZURE_CLIENT_SECRET}"
+      scope: "https://graph.microsoft.com/.default"
+    endpoint: "https://graph.microsoft.com/v1.0/groups/{groupId}/members/$ref"
+    timeout_seconds: 30
+
+  - id: azure-ad-assign-licence
+    name: "Assign M365 Licence"
+    description: "Assigns an additional M365 licence to an existing Azure AD user"
+    openapi_spec: openapi/azure_ad_skill.yaml
+    operation_id: assignLicence
+    auth:
+      type: oauth2_client_credentials
+      token_url: "https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/token"
+      client_id: "${AZURE_CLIENT_ID}"
+      client_secret: "${AZURE_CLIENT_SECRET}"
+      scope: "https://graph.microsoft.com/.default"
+    endpoint: "https://graph.microsoft.com/v1.0/users/{userId}/assignLicense"
+    timeout_seconds: 30
+
+  - id: azure-ad-renew-vpn-cert
+    name: "Renew VPN Certificate"
+    description: "Renews the VPN certificate for a Norvik employee via the PKI gateway"
+    openapi_spec: openapi/azure_ad_skill.yaml
+    operation_id: renewVpnCertificate
+    auth:
+      type: oauth2_client_credentials
+      token_url: "https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/token"
+      client_id: "${AZURE_CLIENT_ID}"
+      client_secret: "${AZURE_CLIENT_SECRET}"
+      scope: "https://graph.microsoft.com/.default"
+    endpoint: "https://apim.nordvik.se/pki/v1/certificates/renew"
+    timeout_seconds: 20
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Notification Skills
+  # ─────────────────────────────────────────────────────────────────────────
+
+  - id: notify-send-onboarding-welcome
+    name: "Send Onboarding Welcome"
+    description: "Sends a welcome email and Teams adaptive card to a new hire and their manager"
+    type: python_function
+    module: skills.email_notification_skill
+    class: NotificationSkill
+    method: send_onboarding_welcome
+    timeout_seconds: 15
+
+  - id: notify-send-approval-request
+    name: "Send Approval Request"
+    description: "Sends an approval request notification to a manager via email and Teams"
+    type: python_function
+    module: skills.email_notification_skill
+    class: NotificationSkill
+    method: send_approval_request
+    timeout_seconds: 15
+
+  - id: notify-send-vpn-cert-notification
+    name: "Send VPN Cert Notification"
+    description: "Notifies a user that their VPN certificate has been renewed"
+    type: python_function
+    module: skills.email_notification_skill
+    class: NotificationSkill
+    method: send_vpn_cert_notification
+    timeout_seconds: 10

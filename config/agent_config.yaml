@@ -1,0 +1,99 @@
+# Norvik Industries AB — watsonx Orchestrate Agent Configuration
+# IBM Client Engineering PoC
+#
+# Deploy with: wxo agents deploy config/agent_config.yaml
+
+agents:
+  - id: nordvik-hr-onboarding-v1
+    name: "Norvik HR Onboarding Agent"
+    description: |
+      Automates end-to-end employee onboarding for Norvik Industries AB.
+      Creates Azure AD accounts, assigns licences, provisions SAP access,
+      and sends welcome notifications — all within 4 hours.
+    language_model: ibm/granite-3-3-8b-instruct
+    version: "1.2.0"
+
+    instructions: |
+      You are the Norvik Industries HR Onboarding Agent, part of an IBM Client Engineering
+      PoC for watsonx Orchestrate.
+
+      Your job is to onboard new employees fully and autonomously. When triggered:
+      1. Always verify the employee exists in SuccessFactors before proceeding.
+      2. Use the role-based access profile to determine the correct Azure groups, SAP role,
+         and M365 licence tier.
+      3. Never store employee PII beyond what is needed for the current request.
+      4. Log every action step, including failures, so the HR team can audit the run.
+      5. If any step fails, complete the remaining steps and report partial completion.
+         Do NOT abort the whole onboarding on a single step failure.
+      6. Always write the completion status back to SuccessFactors.
+
+    skills:
+      - id: successfactors-get-employee
+        description: "Fetch employee record from SAP SuccessFactors"
+      - id: successfactors-request-sap-access
+        description: "Request SAP S/4HANA role for an employee"
+      - id: successfactors-update-onboarding-status
+        description: "Write onboarding completion back to SuccessFactors"
+      - id: azure-ad-create-user
+        description: "Create Azure AD / Entra ID user with licence and groups"
+      - id: notify-send-onboarding-welcome
+        description: "Send welcome email and Teams card to new hire and manager"
+
+    triggers:
+      - type: webhook
+        event: "successfactors.new_hire"
+        description: "Triggered by SuccessFactors New Hire event via Azure APIM"
+      - type: chat
+        description: "Natural language chat invocation via watsonx Orchestrate UI"
+
+    escalation:
+      on_failure: notify_hr_team
+      hr_team_email: "hr-ops@nordvik.se"
+      max_retries: 2
+      retry_delay_seconds: 60
+
+  - id: nordvik-it-provisioning-v1
+    name: "Norvik IT Provisioning Agent"
+    description: |
+      Self-service IT fulfilment agent for Norvik employees.
+      Handles Azure AD group access, M365 licence changes, hardware requests,
+      VPN certificate renewals, and temporary elevated access with auto-expiry.
+    language_model: ibm/granite-3-3-8b-instruct
+    version: "1.1.0"
+
+    instructions: |
+      You are the Norvik Industries IT Provisioning Agent.
+
+      Respond to employee IT requests conversationally and execute them
+      using the available skills. Follow these rules:
+      1. For high-privilege groups (sg-sap-admin, sg-azure-subscription-owner,
+         sg-infra-prod, sg-secrets-access, sg-hr-data-full, sg-finance-data-full),
+         ALWAYS require manager approval. Never bypass this.
+      2. Temporary elevated access is capped at 8 hours maximum.
+      3. Always confirm what you've done in plain language, including any ticket IDs.
+      4. If a request is ambiguous (e.g., "add me to the SAP group"), ask which group
+         they mean before acting.
+      5. Log all actions for the IT audit trail.
+
+    skills:
+      - id: azure-ad-add-to-group
+        description: "Add user to an Azure AD security group"
+      - id: azure-ad-assign-licence
+        description: "Assign an M365 licence to an existing user"
+      - id: azure-ad-renew-vpn-cert
+        description: "Renew VPN certificate for a user"
+      - id: notify-send-approval-request
+        description: "Send an approval request to a manager via email + Teams"
+      - id: notify-send-vpn-cert-notification
+        description: "Notify user of VPN certificate renewal"
+
+    triggers:
+      - type: chat
+        description: "Invoked from Microsoft Teams chatbot (primary surface)"
+      - type: api
+        description: "Direct API call from automation workflows"
+
+    escalation:
+      on_failure: notify_it_team
+      it_team_email: "it-support@nordvik.se"
+      max_retries: 1

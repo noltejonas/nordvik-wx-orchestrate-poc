@@ -1,0 +1,60 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options: [staging, production]
+
+jobs:
+  deploy:
+    name: Deploy watsonx Orchestrate Agents
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install IBM Cloud CLI
+        run: |
+          curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
+          ibmcloud plugin install wxo
+
+      - name: Login to IBM Cloud
+        env:
+          IBMCLOUD_API_KEY: ${{ secrets.IBMCLOUD_API_KEY }}
+          WX_INSTANCE_URL: ${{ secrets.WX_ORCHESTRATE_INSTANCE_URL }}
+        run: |
+          ibmcloud login --apikey "$IBMCLOUD_API_KEY" -r eu-de
+          wxo login --url "$WX_INSTANCE_URL" --apikey "$IBMCLOUD_API_KEY"
+
+      - name: Register skills (OpenAPI specs)
+        run: |
+          wxo skills import openapi/successfactors_skill.yaml --update-existing
+          wxo skills import openapi/azure_ad_skill.yaml --update-existing
+
+      - name: Deploy agents
+        run: |
+          wxo agents deploy config/agent_config.yaml
+
+      - name: Smoke test — health check
+        run: |
+          wxo agents list | grep "nordvik-hr-onboarding-v1"
+          wxo agents list | grep "nordvik-it-provisioning-v1"
+          echo "✅ Both agents deployed successfully"
+
+      - name: Notify deployment
+        if: success()
+        run: |
+          echo "Deployment to ${{ github.event.inputs.environment || 'staging' }} completed"
+          echo "Commit: ${{ github.sha }}"
